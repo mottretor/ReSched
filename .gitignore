@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Experiment outputs
+result/
+
+# OS
+.DS_Store
+Thumbs.db
+/CLAUDE.md
