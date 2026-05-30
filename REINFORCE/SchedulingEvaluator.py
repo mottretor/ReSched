@@ -15,12 +15,15 @@ def validate_model(env, model, dataset, batch_size, inference_type='greedy', sam
         score_am = AverageMeter()
         score_list = [] if baseline is not None else None
 
+        device = next(model.parameters()).device
+
         def run_inference(bs, env, job_batch, op_batch, dur_batch, dependency_batch, connection_batch):
             env.load_data(bs, job_batch, op_batch, dur_batch, dependency_batch, connection_batch)
             state = env.reset_state()
             done = False
             while not done:
                 state, _ = build_model_input(state, env)
+                state = tuple(t.to(device) for t in state)
                 action, _ = model(state)
                 state, _, done = env.step(action)
             return state.finish_time.max(axis=1).max(axis=1)
