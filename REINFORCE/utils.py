@@ -88,6 +88,12 @@ def copy_all_src(dst_root):
         if hasattr(value, '__file__') and value.__file__:
             src_abspath = os.path.abspath(value.__file__)
 
+            # Skip modules whose resolved path doesn't exist on disk.
+            # Can happen when a relative __file__ (e.g. '_ops.py' for a torch
+            # extension) resolves into the cwd but the file isn't actually there.
+            if not os.path.isfile(src_abspath):
+                continue
+
             if src_abspath == os.path.abspath(sys.argv[0]) and main_file_copied:
                 continue
             elif src_abspath == os.path.abspath(sys.argv[0]):
