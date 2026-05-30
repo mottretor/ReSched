@@ -24,6 +24,8 @@ class Trainer:
         self.model.set_decode_type('sampling')
         loop_cnt = 0
 
+        device = next(self.model.parameters()).device
+
         episode = 0
         while episode < self.training_params['episode']:
             remaining = self.training_params['episode'] - episode
@@ -37,6 +39,7 @@ class Trainer:
             done = False
             while not done:
                 state, scaler = build_model_input(state, env)
+                state = tuple(t.to(device) for t in state)
                 action, prob = self.model(state)
 
                 state, reward, done = env.step(action)
@@ -47,7 +50,7 @@ class Trainer:
 
             returns = self.get_return(reward_list)
             returns = np.array(returns) / np.array(scaler_list)
-            returns = torch.tensor(returns, dtype=torch.float)
+            returns = torch.tensor(returns, dtype=torch.float).to(device)
             prob_list = torch.cat(prob_list, dim=1)
 
             # shape: (num_steps, batch)

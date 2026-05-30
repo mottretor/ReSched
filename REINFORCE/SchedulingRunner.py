@@ -41,7 +41,7 @@ class Runner:
         self.device = self._configure_device()
         torch.set_default_dtype(torch.float32)
 
-        self.model = Model(**model_params)
+        self.model = Model(**model_params).to(self.device)
         self.test_only_flag = self.runner_params.get('test_only', False)
         self.trainer = Trainer(self.model, optimizer_params, self.runner_params['training'])
         self.epoch = 1
