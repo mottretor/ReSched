@@ -141,18 +141,24 @@ class CrossAttentionBlock(nn.Module):
         self.embedding_dim = model_params['embedding_dim']
         self.head_num = model_params['head_num']
         self.qkv_dim = model_params['qkv_dim']
+        # When use_op2mac_attn is True a third attention direction is added:
+        #   idx=2: operation (q) <- machine (kv), edge-aware (processing times).
+        # Defaults to False so existing checkpoints load without architecture changes.
+        self.use_op2mac_attn = model_params.get('use_op2mac_attn', False)
+        self.n_attn = 3 if self.use_op2mac_attn else 2
 
         self.Wq = nn.ModuleList(
-            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(2)])
+            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(self.n_attn)])
         self.Wk = nn.ModuleList(
-            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(2)])
+            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(self.n_attn)])
         self.Wv = nn.ModuleList(
-            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(2)])
+            [nn.Linear(self.embedding_dim, self.head_num * self.qkv_dim, bias=False) for _ in range(self.n_attn)])
         self.multi_head_combine = nn.ModuleList(
-            [nn.Linear(self.head_num * self.qkv_dim, self.embedding_dim) for _ in range(2)])
+            [nn.Linear(self.head_num * self.qkv_dim, self.embedding_dim) for _ in range(self.n_attn)])
 
-        self.addAndNormalization = nn.ModuleList([AddAndNormalizationModule(**model_params) for _ in range(2*2)])
-        self.feedForward = nn.ModuleList([FeedForwardModule(**model_params) for _ in range(2)])
+        self.addAndNormalization = nn.ModuleList(
+            [AddAndNormalizationModule(**model_params) for _ in range(self.n_attn * 2)])
+        self.feedForward = nn.ModuleList([FeedForwardModule(**model_params) for _ in range(self.n_attn)])
 
     def forward(self, operation, machine, mask_o2o, mask_o2m, duration, rev_pos):
         # Operation Embedding [batch, operation, embedding]
@@ -161,6 +167,13 @@ class CrossAttentionBlock(nn.Module):
         # Attention 1: operation --> q, operation --> k, v
         # operations get information from other operations(kv)
         ope = self.attention_block(operation, operation, idx=1, mask=mask_o2o, position=rev_pos)
+
+        # Attention 3 (optional): operation --> q, machine --> k, v
+        # operations get information from machines (kv) and duration (no transpose: op is query)
+        if self.use_op2mac_attn:
+            ope = self.attention_block(ope, machine, idx=2, mask=mask_o2m,
+                                       edge_weight=duration,
+                                       self_flag=True, edge_in_qk=True, edge_in_v=True)
 
         # Attention 2: machine --> q, operation --> k, v
         # machines get information from operations(kv) and duration

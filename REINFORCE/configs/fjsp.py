@@ -35,13 +35,13 @@ runner_params = {
     'cuda_device_num': 0,
     'seed': 42,
 
-    'test_only': True,
+    'test_only': False,
 
     # if ckpt is provided, model_pth will be ignored
     'checkpoint': None,
     # 'checkpoint': '../result/FJSP/xxxxx',
-    # 'model_path': None,
-    'model_path': '../ckpt/REINFORCE/FJSP/Old-SD1-10x05.pth',
+    'model_path': None,   # train from scratch; set to a .pth path for warm-start
+    # 'model_path': '../ckpt/REINFORCE/FJSP/Old-SD1-10x05.pth',
 
     'training': {
         'epochs': 2000,     # Large training budget
@@ -100,6 +100,9 @@ model_params = {
     'head_num': 8,
     'qkv_dim': 16,
     'ff_hidden_dim': 512,
+    # New: operation <- machine edge-aware cross-attention (idx=2 in CrossAttentionBlock).
+    # Set False (or omit) to load old checkpoints unchanged.
+    'use_op2mac_attn': True,
 }
 
 logger_params = {
