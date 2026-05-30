@@ -63,8 +63,8 @@ from utils import load_dataset, load_baseline
 TRAIN = True          # False → skip training, evaluate existing checkpoints only
 
 VARIANTS = [
-    ('base',   False),   # (variant_name, use_op2mac_attn)
-    ('op2mac', True),
+    # ('base',   False),   # paper-exact baseline — add back for a full A/B (~8 days total)
+    ('op2mac', True),    # new operation←machine cross-attention (~4 days)
 ]
 
 # None → use the paper-exact 2000 epochs from configs/fjsp.py.
@@ -210,43 +210,63 @@ def evaluate_variant(name: str, use_op2mac_attn: bool, device: torch.device) -> 
 
 
 def print_comparison(df: pd.DataFrame):
-    """Pivot base vs op2mac and print a gap comparison table."""
+    """Print gap results; if both base and op2mac are present show the delta,
+    otherwise compare op2mac against the shipped Old-SD1-10x05 reference."""
     gap_df = df[df['gap(%)'].notna()].copy()
-
-    base   = (gap_df[gap_df['variant'] == 'base']
-              [['dataset', 'inference_type', 'gap(%)']]
-              .rename(columns={'gap(%)': 'gap_base(%)'}))
-    op2mac = (gap_df[gap_df['variant'] == 'op2mac']
-              [['dataset', 'inference_type', 'gap(%)']]
-              .rename(columns={'gap(%)': 'gap_op2mac(%)'}))
-
-    merged = base.merge(op2mac, on=['dataset', 'inference_type'], how='outer')
-    merged['delta(%)'] = merged['gap_op2mac(%)'] - merged['gap_base(%)']
+    variants_present = gap_df['variant'].unique().tolist()
 
     print('\n' + '=' * 80)
-    print('  GAP COMPARISON   (negative delta = op2mac WINS = lower optimality gap)')
-    print('=' * 80)
-    print(merged.to_string(index=False))
 
-    valid = merged['delta(%)'].dropna()
-    n_better = (valid < 0).sum()
-    avg_delta = valid.mean()
-    print(f'\n  op2mac better in {n_better}/{len(valid)} dataset×strategy settings')
-    print(f'  Average delta: {avg_delta:+.4f}%  (negative = op2mac better overall)')
+    if 'base' in variants_present and 'op2mac' in variants_present:
+        # Full A/B: show three-column delta table
+        print('  GAP COMPARISON   (negative delta = op2mac WINS = lower optimality gap)')
+        print('=' * 80)
 
-    # Also merge in the shipped Old-SD1-10x05 numbers if available.
-    ref_csv = '../result/fjsp_results.csv'
-    if os.path.exists(ref_csv):
-        ref = pd.read_csv(ref_csv)
-        ref = (ref[ref['checkpoint'] == 'Old-SD1-10x05']
-               [['dataset', 'inference_type', 'gap(%)']]
-               .rename(columns={'gap(%)': 'gap_shipped(%)'}))
-        # Align dataset labels (the ref CSV uses slightly different names)
-        merged_ref = merged.merge(ref, on=['dataset', 'inference_type'], how='left')
-        has_ref = merged_ref['gap_shipped(%)'].notna().any()
-        if has_ref:
-            print('\n  (Reference column gap_shipped(%) = Old-SD1-10x05 from fjsp_results.csv)')
-            print(merged_ref.to_string(index=False))
+        base   = (gap_df[gap_df['variant'] == 'base']
+                  [['dataset', 'inference_type', 'gap(%)']]
+                  .rename(columns={'gap(%)': 'gap_base(%)'}))
+        op2mac = (gap_df[gap_df['variant'] == 'op2mac']
+                  [['dataset', 'inference_type', 'gap(%)']]
+                  .rename(columns={'gap(%)': 'gap_op2mac(%)'}))
+
+        merged = base.merge(op2mac, on=['dataset', 'inference_type'], how='outer')
+        merged['delta(%)'] = merged['gap_op2mac(%)'] - merged['gap_base(%)']
+        print(merged.to_string(index=False))
+
+        valid = merged['delta(%)'].dropna()
+        n_better = (valid < 0).sum()
+        print(f'\n  op2mac better in {n_better}/{len(valid)} dataset×strategy settings')
+        print(f'  Average delta: {valid.mean():+.4f}%  (negative = op2mac better overall)')
+
+    else:
+        # Single variant (op2mac only): compare against shipped Old-SD1-10x05 reference
+        print('  GAP RESULTS vs shipped Old-SD1-10x05 reference')
+        print('  (negative delta = op2mac WINS = lower optimality gap than shipped model)')
+        print('=' * 80)
+
+        op2mac = (gap_df[gap_df['variant'] == 'op2mac']
+                  [['dataset', 'inference_type', 'gap(%)']]
+                  .rename(columns={'gap(%)': 'gap_op2mac(%)'}))
+
+        ref_csv = '../result/fjsp_results.csv'
+        if os.path.exists(ref_csv):
+            ref = pd.read_csv(ref_csv)
+            ref = (ref[ref['checkpoint'] == 'Old-SD1-10x05']
+                   [['dataset', 'inference_type', 'gap(%)']]
+                   .rename(columns={'gap(%)': 'gap_shipped(%)'}))
+            merged = op2mac.merge(ref, on=['dataset', 'inference_type'], how='left')
+            merged['delta(%)'] = merged['gap_op2mac(%)'] - merged['gap_shipped(%)']
+        else:
+            merged = op2mac
+            print('  (fjsp_results.csv not found — no reference column)')
+
+        print(merged.to_string(index=False))
+
+        if 'delta(%)' in merged.columns:
+            valid = merged['delta(%)'].dropna()
+            n_better = (valid < 0).sum()
+            print(f'\n  op2mac better in {n_better}/{len(valid)} dataset×strategy settings')
+            print(f'  Average delta vs shipped: {valid.mean():+.4f}%')
 
 
 def main():
