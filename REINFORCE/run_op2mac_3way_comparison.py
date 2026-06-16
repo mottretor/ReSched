@@ -43,7 +43,7 @@ CKPT_DIR   = '../ckpt/REINFORCE/FJSP'
 RESULT_DIR = '../result'
 
 GREEDY_BATCH = 200   # instances per batch for greedy
-AUG_BATCH    = 5     # instances per batch for aug_sample (effective = 5×100 = 500)
+AUG_BATCH    = 1     # instances per batch for aug_sample (effective = 1×100 = 100)
 SAMPLE_TIMES = 100   # paper: 100 independent trajectories, report min makespan
 
 DATASETS = [
