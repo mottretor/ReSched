@@ -168,18 +168,18 @@ class CrossAttentionBlock(nn.Module):
         # operations get information from other operations(kv)
         ope = self.attention_block(operation, operation, idx=1, mask=mask_o2o, position=rev_pos)
 
-        # Attention 3 (optional): operation --> q, machine --> k, v
-        # operations get information from machines (kv) and duration (no transpose: op is query)
-        if self.use_op2mac_attn:
-            ope = self.attention_block(ope, machine, idx=2, mask=mask_o2m,
-                                       edge_weight=duration,
-                                       self_flag=True, edge_in_qk=True, edge_in_v=True)
-
         # Attention 2: machine --> q, operation --> k, v
         # machines get information from operations(kv) and duration
         mac = self.attention_block(machine, operation, idx=0, mask=mask_o2m.transpose(1, 2),
                                    edge_weight=duration.transpose(1, 2),
                                    self_flag=True, edge_in_qk=True, edge_in_v=True)
+
+        # Attention 3 (optional): operation --> q, machine --> k, v
+        # operations get information from machines (kv) and duration (no transpose: op is query)
+        if self.use_op2mac_attn:
+            ope = self.attention_block(ope, mac, idx=2, mask=mask_o2m,
+                                       edge_weight=duration,
+                                       self_flag=True, edge_in_qk=True, edge_in_v=True)
 
         return ope, mac
 
